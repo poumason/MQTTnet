@@ -11,7 +11,7 @@ namespace MQTTnet.Internal
 
         public static void ThrowIfGracefulSocketClose(int readBytesCount)
         {
-            if (readBytesCount <= 0)
+            if (readBytesCount < 0)
             {
                 throw new MqttCommunicationClosedGracefullyException();
             }
