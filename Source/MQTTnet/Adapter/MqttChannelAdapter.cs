@@ -166,6 +166,10 @@ namespace MQTTnet.Adapter
         private async Task<ReceivedMqttPacket> ReceiveAsync(CancellationToken cancellationToken)
         {
             var fixedHeader = await MqttPacketReader.ReadFixedHeaderAsync(_channel, _fixedHeaderBuffer, _singleByteBuffer, cancellationToken).ConfigureAwait(false);
+            if (fixedHeader == null)
+            {
+                return null;
+            }
 
             try
             {
@@ -193,14 +197,33 @@ namespace MQTTnet.Adapter
 #else
                     // async/await is not used to avoid the overhead of context switches. We assume that the reamining data
                     // has been sent from the sender directly after the initial bytes.
-                    var readBytes = _channel.ReadAsync(body, bodyOffset, chunkSize, cancellationToken).ConfigureAwait(false).GetAwaiter().GetResult();
+                    int readBytes = 0;
+                    try
+                    {
+                        _channel.ReadAsync(body, bodyOffset, chunkSize, cancellationToken).ConfigureAwait(false).GetAwaiter().GetResult();
+                    }
+                    catch (IOException)
+                    {
+                        break;
+                    }
 #endif
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
 
-                    cancellationToken.ThrowIfCancellationRequested();
-                    ExceptionHelper.ThrowIfGracefulSocketClose(readBytes);
+                    if (readBytes == 0)
+                    {
+                        break;
+                    }
 
                     bodyOffset += readBytes;
                 } while (bodyOffset < body.Length);
+
+                if (bodyOffset < body.Length)
+                {
+                    return null;
+                }
 
                 return new ReceivedMqttPacket(fixedHeader.Flags, new MqttPacketBodyReader(body, 0, body.Length));
             }

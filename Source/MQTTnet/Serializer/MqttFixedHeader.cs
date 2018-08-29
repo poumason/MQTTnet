@@ -1,6 +1,6 @@
 ﻿namespace MQTTnet.Serializer
 {
-    public struct MqttFixedHeader
+    public class MqttFixedHeader
     {
         public MqttFixedHeader(byte flags, int remainingLength)
         {
