@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using MQTTnet.Channel;
@@ -66,19 +67,26 @@ namespace MQTTnet.Serializer
             // is too big for reading 1 byte in a row. We expect that the remaining data was sent
             // directly after the initial bytes. If the client disconnects just in this moment we
             // will get an exception anyway.
-            var bodyLength = await ReadBodyLength(channel, buffer[1], singleByteBuffer, cancellationToken).ConfigureAwait(false);
+            var readBodyResult = await ReadBodyLengthAsync(channel, buffer[1], singleByteBuffer, cancellationToken).ConfigureAwait(false);
+            if (!readBodyResult.Item1)
+            {
+                return null;
+            }
+
+            var bodyLength = readBodyResult.Item2;
 #endif
 
             return new MqttFixedHeader(buffer[0], bodyLength);
         }
 
 #if !WINDOWS_UWP
-        private static async Task<int> ReadBodyLength(IMqttChannel channel, byte initialEncodedByte, byte[] singleByteBuffer, CancellationToken cancellationToken)
+        private static async Task<Tuple<bool, int>> ReadBodyLengthAsync(IMqttChannel channel, byte initialEncodedByte, byte[] singleByteBuffer, CancellationToken cancellationToken)
         {
             var offset = 0;
             var multiplier = 128;
             var value = initialEncodedByte & 127;
             int encodedByte = initialEncodedByte;
+            bool isSuccess = true;
 
             while ((encodedByte & 128) != 0)
             {
@@ -90,16 +98,23 @@ namespace MQTTnet.Serializer
 
                 cancellationToken.ThrowIfCancellationRequested();
 
-                encodedByte = await ReadByteAsync(channel, singleByteBuffer, cancellationToken);
+                var readByteResult = await ReadByteAsync(channel, singleByteBuffer, cancellationToken);
+                if (!readByteResult.Item1)
+                {
+                    isSuccess = false;
+                    break;
+                }
+
+                encodedByte = readByteResult.Item2;
 
                 value += (byte)(encodedByte & 127) * multiplier;
                 multiplier *= 128;
             }
 
-            return value;
+            return Tuple.Create(isSuccess, value);
         }
 
-        private static async Task<byte> ReadByteAsync(IMqttChannel channel, byte[] singleByteBuffer, CancellationToken cancellationToken)
+        private static async Task<Tuple<bool, byte>> ReadByteAsync(IMqttChannel channel, byte[] singleByteBuffer, CancellationToken cancellationToken)
         {
             int readCount = 0;
 
@@ -109,16 +124,20 @@ namespace MQTTnet.Serializer
             }
             catch (IOException)
             {
+                return Tuple.Create(false, (byte)0);
             }
 
-            cancellationToken.ThrowIfCancellationRequested();
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return Tuple.Create(false, (byte)0);
+            }
 
             if (readCount <= 0)
             {
-                ExceptionHelper.ThrowGracefulSocketClose();
+                return Tuple.Create(false, (byte)0);
             }
 
-            return singleByteBuffer[0];
+            return Tuple.Create(true, singleByteBuffer[0]);
         }
 
 #else
