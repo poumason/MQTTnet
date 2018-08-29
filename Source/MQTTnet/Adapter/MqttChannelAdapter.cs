@@ -150,6 +150,10 @@ namespace MQTTnet.Adapter
 
                 return packet;
             }
+            catch (MqttCommunicationClosedGracefullyException)
+            {
+
+            }
             catch (Exception exception)
             {
                 if (IsWrappedException(exception))
