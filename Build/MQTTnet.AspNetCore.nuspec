@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package >
   <metadata>
-    <id>MQTTnet.AspNetCore</id>
+    <id>MQTTnet.AspNetCore.KKBOX</id>
     <version>0.0.0</version>
     <authors>Christian Kratky</authors>
     <owners>Christian Kratky</owners>
